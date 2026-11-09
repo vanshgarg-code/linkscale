@@ -1,3 +1,7 @@
+server:
+  address: 127.0.0.1
+  port: 8080
+
 spring:
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:linkscale}
@@ -10,3 +14,6 @@ spring:
       hibernate:
         format_sql: true
 
+linkscale:
+  dev-mode:
+    allow-unauthenticated: true

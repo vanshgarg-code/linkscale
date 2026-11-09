@@ -23,3 +23,12 @@ management:
       probes:
         enabled: true
 
+linkscale:
+  base-url: http://localhost:8080
+  dev-mode:
+    allow-unauthenticated: false
+    fixture-email: dev@linkscale.local
+  generator:
+    code-length: 8
+    max-retries: 5
+

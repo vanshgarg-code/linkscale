@@ -1,0 +1,7 @@
+spring:
+  jpa:
+    show-sql: true
+
+linkscale:
+  dev-mode:
+    allow-unauthenticated: true

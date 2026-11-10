@@ -588,8 +588,15 @@ class AuthIT {
     }
 
     @Test
-    void shouldMaintainPhase1bDevLinkCreationFlowWithoutAuthOrCsrf() throws Exception {
+    void shouldRejectAnonymousLinkCreationWithoutAuthWith401() throws Exception {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+
+        HttpRequest csrfReq = HttpRequest.newBuilder()
+                .uri(URI.create(getBaseUrl() + "/api/v1/auth/csrf"))
+                .GET()
+                .build();
+        HttpResponse<String> csrfRes = client.send(csrfReq, HttpResponse.BodyHandlers.ofString());
+        String csrfToken = JsonPath.read(csrfRes.body(), "$.token");
 
         String payload = """
                 {"destination_url":"https://spring.io/projects/spring-boot"}
@@ -598,22 +605,11 @@ class AuthIT {
         HttpRequest postReq = HttpRequest.newBuilder()
                 .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                 .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
 
         HttpResponse<String> postRes = client.send(postReq, HttpResponse.BodyHandlers.ofString());
-        assertThat(postRes.statusCode()).isEqualTo(201);
-
-        String code = JsonPath.read(postRes.body(), "$.code");
-        assertThat(code).isNotBlank();
-
-        // Redirect works
-        HttpRequest getReq = HttpRequest.newBuilder()
-                .uri(URI.create(getBaseUrl() + "/r/" + code))
-                .GET()
-                .build();
-        HttpResponse<Void> getRes = client.send(getReq, HttpResponse.BodyHandlers.discarding());
-        assertThat(getRes.statusCode()).isEqualTo(302);
-        assertThat(getRes.headers().firstValue("Location")).contains("https://spring.io/projects/spring-boot");
+        assertThat(postRes.statusCode()).isEqualTo(401);
     }
 }

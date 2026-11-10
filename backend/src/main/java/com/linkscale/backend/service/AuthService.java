@@ -36,15 +36,18 @@ public class AuthService {
         return new UserResponse(user.id(), user.email(), user.createdAt());
     }
 
-    public UserResponse getCurrentAccount(Authentication authentication) {
+    public UserRecord getAuthenticatedUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new UserNotFoundException("No authenticated user in current session");
         }
 
         String email = authentication.getName();
-        UserRecord user = userRepository.findByEmail(email)
+        return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UserNotFoundException("User not found for current session: " + email));
+    }
 
+    public UserResponse getCurrentAccount(Authentication authentication) {
+        UserRecord user = getAuthenticatedUser(authentication);
         return new UserResponse(user.id(), user.email(), user.createdAt());
     }
 }

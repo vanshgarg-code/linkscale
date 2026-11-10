@@ -1,8 +1,51 @@
 # LinkScale - URL Shortener & Analytics Platform
 
-## Phase 1A: Backend Foundation
+LinkScale is a URL-shortening platform built with Java 21, Spring Boot, and
+PostgreSQL. The backend is available through a REST API. The web frontend
+is planned for Phase 2.
 
-This repository contains the foundational backend infrastructure for **LinkScale**, establishing build harness, containerized local development services, database migrations with Flyway, and automated integration tests with Testcontainers.
+## What works today
+
+- Signed-in users can shorten URLs with a generated code or a custom alias.
+  Links can have an optional title and expiration date.
+- Anyone can follow an active short link without signing in. Expired,
+  inactive, and deleted links stop redirecting.
+- Users can register, sign in, check their current account, and sign out.
+  Authentication uses server-side sessions and CSRF protection.
+- Users can list, search, filter, edit, deactivate, and soft-delete their
+  own links. Management requests cannot access another account's links.
+
+## API overview
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v1/auth/csrf` | Get a CSRF token before submitting an auth request |
+| `POST /api/v1/auth/register` | Register an account |
+| `POST /api/v1/auth/login` | Start a signed-in session |
+| `GET /api/v1/auth/me` | Get the signed-in account |
+| `POST /api/v1/auth/logout` | End the session |
+| `POST /api/v1/links` | Create a link for the signed-in account |
+| `GET /api/v1/links` | List owned links with search, status filters, and pagination |
+| `GET /api/v1/links/{id}` | Get an owned link |
+| `PATCH /api/v1/links/{id}` | Update a link's title, expiration, or active status |
+| `DELETE /api/v1/links/{id}` | Soft-delete an owned link |
+| `GET /r/{code}` | Follow a public short link |
+| `GET /actuator/health` | Check backend health |
+
+For example, `GET /api/v1/links?search=docs&status=active&page=0&size=20`
+returns the signed-in account's active links matching `docs`.
+
+## Roadmap
+
+- [x] Phase 0 — Architecture and planning
+- [x] Phase 1A — Backend foundation
+- [x] Phase 1B — URL shortening and public redirects
+- [x] Phase 1C — Authentication and owner-scoped link management
+- [ ] Phase 2 — Web frontend and shortening flow
+- [ ] Phase 3 — Authenticated dashboard
+- [ ] Phase 4 — Analytics, Redis caching, and rate limiting
+- [ ] Phase 5 — End-to-end testing and hardening
+- [ ] Phase 6 — Deployment and portfolio release
 
 ### Technology Stack
 * **Java**: 21 (LTS)

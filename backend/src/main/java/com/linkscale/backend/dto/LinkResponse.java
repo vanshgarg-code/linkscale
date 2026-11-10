@@ -12,6 +12,7 @@ public record LinkResponse(
         String title,
         @JsonProperty("expires_at") OffsetDateTime expiresAt,
         boolean active,
-        @JsonProperty("created_at") OffsetDateTime createdAt
+        @JsonProperty("created_at") OffsetDateTime createdAt,
+        @JsonProperty("updated_at") OffsetDateTime updatedAt
 ) {}
 

@@ -22,6 +22,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -61,15 +63,46 @@ class LinkFlowIT {
     private LinkScaleProperties properties;
 
     private HttpClient httpClient;
+    private CookieManager cookieManager;
+    private String csrfToken;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        jdbcClient.sql("DELETE FROM links").update();
+        jdbcClient.sql("DELETE FROM users").update();
+
+        cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         httpClient = HttpClient.newBuilder()
+                .cookieHandler(cookieManager)
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
 
-        jdbcClient.sql("DELETE FROM links").update();
-        jdbcClient.sql("DELETE FROM users").update();
+        // 1. Fetch pre-login CSRF token
+        HttpRequest csrfReq = HttpRequest.newBuilder()
+                .uri(URI.create(getBaseUrl() + "/api/v1/auth/csrf"))
+                .GET()
+                .build();
+        HttpResponse<String> csrfRes = httpClient.send(csrfReq, HttpResponse.BodyHandlers.ofString());
+        String preLoginCsrf = JsonPath.read(csrfRes.body(), "$.token");
+
+        // 2. Register test account
+        HttpRequest regReq = HttpRequest.newBuilder()
+                .uri(URI.create(getBaseUrl() + "/api/v1/auth/register"))
+                .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", preLoginCsrf)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"email\":\"linkflow@linkscale.local\",\"password\":\"password123\"}"))
+                .build();
+        httpClient.send(regReq, HttpResponse.BodyHandlers.discarding());
+
+        // 3. Login to establish session
+        HttpRequest loginReq = HttpRequest.newBuilder()
+                .uri(URI.create(getBaseUrl() + "/api/v1/auth/login"))
+                .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", preLoginCsrf)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"email\":\"linkflow@linkscale.local\",\"password\":\"password123\"}"))
+                .build();
+        HttpResponse<String> loginRes = httpClient.send(loginReq, HttpResponse.BodyHandlers.ofString());
+        csrfToken = loginRes.headers().firstValue("X-XSRF-TOKEN").orElse(preLoginCsrf);
     }
 
     private String getBaseUrl() {
@@ -102,6 +135,7 @@ class LinkFlowIT {
         HttpRequest postReq = HttpRequest.newBuilder()
                 .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                 .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                 .build();
 
@@ -136,6 +170,7 @@ class LinkFlowIT {
         HttpRequest postReq = HttpRequest.newBuilder()
                 .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                 .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                 .build();
 
@@ -163,6 +198,7 @@ class LinkFlowIT {
         HttpRequest postReq1 = HttpRequest.newBuilder()
                 .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                 .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(firstJson))
                 .build();
 
@@ -174,6 +210,7 @@ class LinkFlowIT {
         HttpRequest postReq2 = HttpRequest.newBuilder()
                 .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                 .header("Content-Type", "application/json")
+                .header("X-XSRF-TOKEN", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(secondJson))
                 .build();
 
@@ -199,6 +236,7 @@ class LinkFlowIT {
             HttpRequest postReq = HttpRequest.newBuilder()
                     .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                     .header("Content-Type", "application/json")
+                    .header("X-XSRF-TOKEN", csrfToken)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
             HttpResponse<String> res = httpClient.send(postReq, HttpResponse.BodyHandlers.ofString());
@@ -228,11 +266,11 @@ class LinkFlowIT {
         };
 
         LinkService testLinkService = new LinkService(
-                linkRepository, devFixtureService, urlValidator, customAliasValidator,
+                linkRepository, urlValidator, customAliasValidator,
                 deterministicGenerator, properties);
 
         CreateLinkRequest req = new CreateLinkRequest("https://fresh-target.com", null, "Retry Test", null);
-        LinkResponse response = testLinkService.createLink(req);
+        LinkResponse response = testLinkService.createLink(req, ownerId);
 
         assertThat(response.code()).isEqualTo("collid02");
         assertThat(response.destinationUrl()).isEqualTo("https://fresh-target.com");
@@ -251,11 +289,11 @@ class LinkFlowIT {
         };
 
         LinkService testLinkService = new LinkService(
-                linkRepository, devFixtureService, urlValidator, customAliasValidator,
+                linkRepository, urlValidator, customAliasValidator,
                 alwaysCollidingGenerator, properties);
 
         CreateLinkRequest req = new CreateLinkRequest("https://fresh-target.com", null, "Exhaust Test", null);
-        assertThatThrownBy(() -> testLinkService.createLink(req))
+        assertThatThrownBy(() -> testLinkService.createLink(req, ownerId))
                 .isInstanceOf(CodeGenerationExhaustedException.class)
                 .hasMessageContaining("temporarily unavailable");
     }
@@ -270,6 +308,7 @@ class LinkFlowIT {
             HttpRequest postReq = HttpRequest.newBuilder()
                     .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                     .header("Content-Type", "application/json")
+                    .header("X-XSRF-TOKEN", csrfToken)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
 
@@ -299,6 +338,7 @@ class LinkFlowIT {
             HttpRequest postReq = HttpRequest.newBuilder()
                     .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                     .header("Content-Type", "application/json")
+                    .header("X-XSRF-TOKEN", csrfToken)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
 
@@ -323,6 +363,7 @@ class LinkFlowIT {
             HttpRequest postReq = HttpRequest.newBuilder()
                     .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                     .header("Content-Type", "application/json")
+                    .header("X-XSRF-TOKEN", csrfToken)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
 
@@ -344,6 +385,7 @@ class LinkFlowIT {
             HttpRequest postReq = HttpRequest.newBuilder()
                     .uri(URI.create(getBaseUrl() + "/api/v1/links"))
                     .header("Content-Type", "application/json")
+                    .header("X-XSRF-TOKEN", csrfToken)
                     .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                     .build();
 

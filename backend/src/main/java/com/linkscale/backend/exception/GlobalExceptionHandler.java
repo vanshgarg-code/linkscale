@@ -26,7 +26,7 @@ public class GlobalExceptionHandler {
                 .body(ApiErrorResponse.of(HttpStatus.CONFLICT.value(), "Conflict", ex.getMessage()));
     }
 
-    @ExceptionHandler({InvalidCustomAliasException.class, InvalidDestinationUrlException.class})
+    @ExceptionHandler({InvalidCustomAliasException.class, InvalidDestinationUrlException.class, IllegalArgumentException.class})
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiErrorResponse.of(HttpStatus.BAD_REQUEST.value(), "Bad Request", ex.getMessage()));

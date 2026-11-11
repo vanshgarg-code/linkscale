@@ -72,3 +72,31 @@ export async function getCurrentUser(): Promise<{ email: string } | null> {
   }
 }
 
+export type LinkFilter = 'all' | 'active' | 'inactive' | 'expired';
+
+export interface DashboardLink {
+  id: number;
+  title: string | null;
+  destination_url: string;
+  short_url: string;
+  active: boolean;
+  expires_at: string | null;
+}
+
+interface LinkPage {
+  content: DashboardLink[];
+  total_pages: number;
+}
+
+export async function fetchLinks(
+  search: string,
+  status: LinkFilter,
+  page: number,
+  signal: AbortSignal,
+): Promise<LinkPage> {
+  const query = new URLSearchParams({ search, status, page: String(page), size: '10' });
+  const response = await fetch(`/api/v1/links?${query}`, { credentials: 'include', signal });
+  if (response.status === 401) throw new Error('Your session has expired. Sign in again to see your links.');
+  if (!response.ok) throw new Error('Could not load your links. Try again.');
+  return response.json();
+}

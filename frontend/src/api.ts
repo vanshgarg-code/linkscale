@@ -100,3 +100,31 @@ export async function fetchLinks(
   if (!response.ok) throw new Error('Could not load your links. Try again.');
   return response.json();
 }
+
+type LinkUpdate = Partial<Pick<DashboardLink, 'title' | 'expires_at' | 'active'>>;
+
+async function writeLink(id: number, method: 'PATCH' | 'DELETE', update?: LinkUpdate): Promise<void> {
+  const token = await getCsrfToken();
+  const headers: Record<string, string> = { 'X-XSRF-TOKEN': token };
+  if (update) headers['Content-Type'] = 'application/json';
+  const response = await fetch(`/api/v1/links/${id}`, {
+    method,
+    credentials: 'include',
+    headers,
+    body: update ? JSON.stringify(update) : undefined,
+  });
+  if (response.ok) return;
+
+  if (response.status === 401) throw new Error('Your session has expired. Sign in again.');
+  const error = await response.json().catch(() => null);
+  const fallback = method === 'DELETE' ? 'Could not delete the link.' : 'Could not update the link.';
+  throw new Error(error?.message || fallback);
+}
+
+export function updateLink(id: number, update: LinkUpdate): Promise<void> {
+  return writeLink(id, 'PATCH', update);
+}
+
+export function deleteLink(id: number): Promise<void> {
+  return writeLink(id, 'DELETE');
+}

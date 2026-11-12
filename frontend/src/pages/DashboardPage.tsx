@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import LinkManagement, { type LinkAction } from '../components/LinkManagement';
 import { fetchLinks, type DashboardLink, type LinkFilter } from '../api';
 
 function linkStatus(link: DashboardLink) {
@@ -19,20 +20,30 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copyError, setCopyError] = useState('');
+  const [management, setManagement] = useState<{ id: number; action: LinkAction } | null>(null);
+  const [notice, setNotice] = useState('');
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
+      let movingToLastPage = false;
       try {
         const result = await fetchLinks(search.trim(), status, page, controller.signal);
         if (controller.signal.aborted) return;
+        const lastPage = Math.max(0, result.total_pages - 1);
+        if (page > lastPage) {
+          movingToLastPage = true;
+          setPage(lastPage);
+          return;
+        }
         setLinks(result.content);
         setTotalPages(result.total_pages);
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : 'Could not load your links.');
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted && !movingToLastPage) setLoading(false);
       }
     }, 200);
 
@@ -40,13 +51,21 @@ export default function DashboardPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [search, status, page]);
+  }, [search, status, page, revision]);
 
   function resetResult() {
     setLoading(true);
     setError('');
     setCopiedId(null);
     setCopyError('');
+    setNotice('');
+  }
+
+  function finishManagement(message: string) {
+    setManagement(null);
+    resetResult();
+    setNotice(message);
+    setRevision((value) => value + 1);
   }
 
   async function copyLink(link: DashboardLink) {
@@ -68,12 +87,14 @@ export default function DashboardPage() {
           <Link to="/" className="rounded-md bg-primary px-4 py-2 font-semibold">Create a short link</Link>
         </div>
 
+        {notice && <p role="status" className="mb-3 text-sm">{notice}</p>}
         <div className="rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row">
             <label className="flex flex-1 flex-col gap-1 text-sm font-medium">
               Search
               <input
                 type="search"
+                disabled={management !== null}
                 placeholder="Search by destination or short code"
                 value={search}
                 onChange={(event) => {
@@ -88,6 +109,7 @@ export default function DashboardPage() {
             <label className="flex flex-col gap-1 text-sm font-medium">
               Status
               <select
+                disabled={management !== null}
                 value={status}
                 onChange={(event) => {
                   resetResult();
@@ -114,20 +136,39 @@ export default function DashboardPage() {
           {!loading && !error && links.length > 0 && (
             <ul className="divide-y divide-slate-200">
               {links.map((link) => (
-                <li key={link.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    {link.title && <p className="mb-1 break-words font-semibold">{link.title}</p>}
-                    <a href={link.short_url} target="_blank" rel="noreferrer" className="break-all font-medium underline">
-                      {link.short_url}
-                    </a>
-                    <p className="mt-1 break-all text-sm text-slate-600">{link.destination_url}</p>
+                <li key={link.id} className="space-y-3 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      {link.title && <p className="mb-1 break-words font-semibold">{link.title}</p>}
+                      <a href={link.short_url} target="_blank" rel="noreferrer" className="break-all font-medium underline">
+                        {link.short_url}
+                      </a>
+                      <p className="mt-1 break-all text-sm text-slate-600">{link.destination_url}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-pageBg px-2.5 py-1 text-xs font-medium">{linkStatus(link)}</span>
+                      <button type="button" onClick={() => void copyLink(link)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium">
+                        {copiedId === link.id ? 'Copied' : 'Copy'}
+                      </button>
+                      <button type="button" disabled={management !== null} onClick={() => setManagement({ id: link.id, action: 'edit' })} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+                        Edit
+                      </button>
+                      <button type="button" disabled={management !== null} onClick={() => setManagement({ id: link.id, action: 'toggle' })} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50">
+                        {link.active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                      <button type="button" disabled={management !== null} onClick={() => setManagement({ id: link.id, action: 'delete' })} className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50">
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="rounded-full bg-pageBg px-2.5 py-1 text-xs font-medium">{linkStatus(link)}</span>
-                    <button type="button" onClick={() => void copyLink(link)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium">
-                      {copiedId === link.id ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
+                  {management?.id === link.id && (
+                    <LinkManagement
+                      link={link}
+                      action={management.action}
+                      onClose={() => setManagement(null)}
+                      onSaved={finishManagement}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -137,7 +178,7 @@ export default function DashboardPage() {
             <nav aria-label="Link pages" className="flex items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm">
               <button
                 type="button"
-                disabled={page === 0}
+                disabled={management !== null || page === 0}
                 onClick={() => { resetResult(); setPage(page - 1); }}
                 className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40"
               >
@@ -146,7 +187,7 @@ export default function DashboardPage() {
               <span>Page {page + 1} of {totalPages}</span>
               <button
                 type="button"
-                disabled={page + 1 >= totalPages}
+                disabled={management !== null || page + 1 >= totalPages}
                 onClick={() => { resetResult(); setPage(page + 1); }}
                 className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40"
               >

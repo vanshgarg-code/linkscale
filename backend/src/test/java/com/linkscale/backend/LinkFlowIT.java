@@ -105,6 +105,10 @@ class LinkFlowIT {
         csrfToken = loginRes.headers().firstValue("X-XSRF-TOKEN").orElse(preLoginCsrf);
     }
 
+    private long clickCount() {
+        return jdbcClient.sql("SELECT COUNT(*) FROM click_events").query(Long.class).single();
+    }
+
     private String getBaseUrl() {
         return "http://localhost:" + port;
     }
@@ -142,6 +146,7 @@ class LinkFlowIT {
         HttpResponse<String> postRes = httpClient.send(postReq, HttpResponse.BodyHandlers.ofString());
         assertThat(postRes.statusCode()).isEqualTo(201);
 
+        Number linkId = JsonPath.read(postRes.body(), "$.id");
         String code = JsonPath.read(postRes.body(), "$.code");
         String destUrl = JsonPath.read(postRes.body(), "$.destination_url");
         String shortUrl = JsonPath.read(postRes.body(), "$.short_url");
@@ -151,16 +156,28 @@ class LinkFlowIT {
         assertThat(destUrl).isEqualTo("https://example.com/target");
         assertThat(shortUrl).endsWith("/r/" + code);
 
-        // Perform redirect inspection without following
-        HttpRequest getReq = HttpRequest.newBuilder()
-                .uri(URI.create(getBaseUrl() + "/r/" + code))
-                .GET()
-                .build();
+        // Use a client without cookies to exercise the public route.
+        HttpClient visitor = HttpClient.newHttpClient();
+        URI redirectUri = URI.create(getBaseUrl() + "/r/" + code);
+        assertThat(clickCount()).isZero();
 
-        HttpResponse<Void> getRes = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
+        HttpRequest headRequest = HttpRequest.newBuilder(redirectUri)
+                .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                .build();
+        assertThat(visitor.send(headRequest, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(302);
+        assertThat(clickCount()).isZero();
+
+        HttpRequest getRequest = HttpRequest.newBuilder(redirectUri).GET().build();
+        HttpResponse<Void> getRes = visitor.send(getRequest, HttpResponse.BodyHandlers.discarding());
         assertThat(getRes.statusCode()).isEqualTo(302);
         assertThat(getRes.headers().firstValue("Location")).contains("https://example.com/target");
         assertThat(getRes.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(clickCount()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT link_id FROM click_events WHERE clicked_at IS NOT NULL")
+                .query(Long.class).single()).isEqualTo(linkId.longValue());
+
+        assertThat(visitor.send(getRequest, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(302);
+        assertThat(clickCount()).isEqualTo(2);
     }
 
     @Test
@@ -407,6 +424,7 @@ class LinkFlowIT {
         HttpResponse<Void> getRes = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
         assertThat(getRes.statusCode()).isEqualTo(404);
         assertThat(getRes.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(clickCount()).isZero();
     }
 
     @Test
@@ -425,6 +443,7 @@ class LinkFlowIT {
         HttpResponse<Void> getRes = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
         assertThat(getRes.statusCode()).isEqualTo(404);
         assertThat(getRes.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(clickCount()).isZero();
     }
 
     @Test
@@ -445,6 +464,7 @@ class LinkFlowIT {
         HttpResponse<Void> getRes = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
         assertThat(getRes.statusCode()).isEqualTo(404);
         assertThat(getRes.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(clickCount()).isZero();
     }
 
     @Test
@@ -465,6 +485,7 @@ class LinkFlowIT {
         HttpResponse<Void> getRes = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
         assertThat(getRes.statusCode()).isEqualTo(410);
         assertThat(getRes.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(clickCount()).isZero();
     }
 
     @Test

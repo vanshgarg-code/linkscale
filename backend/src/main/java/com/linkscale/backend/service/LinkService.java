@@ -152,7 +152,7 @@ public class LinkService {
         );
     }
 
-    public String resolveDestinationUrl(String rawCode) {
+    public LinkRecord resolveRedirect(String rawCode) {
         if (rawCode == null || rawCode.isBlank()) {
             throw new LinkNotFoundException("Link code must not be blank");
         }
@@ -169,7 +169,7 @@ public class LinkService {
             throw new LinkExpiredException("Link has expired: " + code);
         }
 
-        return link.destinationUrl();
+        return link;
     }
 
     private LinkResponse toResponse(LinkRecord link) {

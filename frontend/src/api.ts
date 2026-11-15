@@ -128,3 +128,20 @@ export function updateLink(id: number, update: LinkUpdate): Promise<void> {
 export function deleteLink(id: number): Promise<void> {
   return writeLink(id, 'DELETE');
 }
+
+export interface LinkAnalyticsData {
+  total_clicks: number;
+  timezone: string;
+  daily_clicks: { date: string; clicks: number }[];
+}
+
+export async function fetchLinkAnalytics(id: number, days: number, signal: AbortSignal): Promise<LinkAnalyticsData> {
+  const response = await fetch(`/api/v1/links/${id}/analytics?days=${days}`, {
+    credentials: 'include',
+    signal,
+  });
+  if (response.status === 401) throw new Error('Your session has expired. Sign in again to see analytics.');
+  if (response.status === 404) throw new Error('This link is no longer available.');
+  if (!response.ok) throw new Error('Could not load analytics. Try again.');
+  return response.json();
+}

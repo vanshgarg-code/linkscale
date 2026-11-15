@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import LinkManagement, { type LinkAction } from '../components/LinkManagement';
 import { fetchLinks, type DashboardLink, type LinkFilter } from '../api';
+
+const LinkAnalytics = lazy(() => import('../components/LinkAnalytics'));
 
 function linkStatus(link: DashboardLink) {
   if (link.expires_at && Date.parse(link.expires_at) <= Date.now()) {
@@ -21,6 +23,7 @@ export default function DashboardPage() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copyError, setCopyError] = useState('');
   const [management, setManagement] = useState<{ id: number; action: LinkAction } | null>(null);
+  const [analyticsId, setAnalyticsId] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
 
@@ -59,6 +62,7 @@ export default function DashboardPage() {
     setCopiedId(null);
     setCopyError('');
     setNotice('');
+    setAnalyticsId(null);
   }
 
   function finishManagement(message: string) {
@@ -150,6 +154,15 @@ export default function DashboardPage() {
                       <button type="button" onClick={() => void copyLink(link)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium">
                         {copiedId === link.id ? 'Copied' : 'Copy'}
                       </button>
+                      <button
+                        type="button"
+                        disabled={management !== null}
+                        aria-expanded={analyticsId === link.id}
+                        onClick={() => setAnalyticsId(analyticsId === link.id ? null : link.id)}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                      >
+                        Analytics
+                      </button>
                       <button type="button" disabled={management !== null} onClick={() => setManagement({ id: link.id, action: 'edit' })} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50">
                         Edit
                       </button>
@@ -161,6 +174,11 @@ export default function DashboardPage() {
                       </button>
                     </div>
                   </div>
+                  {analyticsId === link.id && (
+                    <Suspense fallback={<p role="status" className="text-sm text-slate-600">Loading click analytics…</p>}>
+                      <LinkAnalytics linkId={link.id} />
+                    </Suspense>
+                  )}
                   {management?.id === link.id && (
                     <LinkManagement
                       link={link}

@@ -27,6 +27,7 @@ is planned for Phase 2.
 | `POST /api/v1/links` | Create a link for the signed-in account |
 | `GET /api/v1/links` | List owned links with search, status filters, and pagination |
 | `GET /api/v1/links/{id}` | Get an owned link |
+| `GET /api/v1/links/{id}/analytics?days=30` | Get a click total and daily counts for an owned link |
 | `PATCH /api/v1/links/{id}` | Update a link's title, expiration, or active status |
 | `DELETE /api/v1/links/{id}` | Soft-delete an owned link |
 | `GET /r/{code}` | Follow a public short link |
@@ -34,6 +35,12 @@ is planned for Phase 2.
 
 For example, `GET /api/v1/links?search=docs&status=active&page=0&size=20`
 returns the signed-in account's active links matching `docs`.
+
+Link analytics accepts `days` from 1 through 90, with a default of 30.
+The window includes today in UTC and returns daily counts in date order,
+including zero-click days. `total_clicks` is the sum for that window.
+Each successful GET redirect can contribute one click, including repeat visits.
+A signed-out request gets 401. A missing, deleted, or another user's link gets 404.
 
 ## Roadmap
 

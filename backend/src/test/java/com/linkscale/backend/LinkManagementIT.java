@@ -1,6 +1,8 @@
 package com.linkscale.backend;
 
+import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.linkscale.backend.domain.LinkRecord;
 import com.linkscale.backend.repository.LinkRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -162,6 +166,72 @@ class LinkManagementIT {
 
         HttpRequest request = builder.DELETE().build();
         HttpClient client = (session != null) ? session.client : anonymousClient;
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void shouldReturnOwnedClickAnalyticsWithUtcBucketsAndZeroDays() throws Exception {
+        UserSession owner = createUserSession("analytics@linkscale.local", "password123");
+        LinkRecord link = linkRepository.insertOnConflictDoNothing(
+                "analytics-link", "https://example.com", owner.userId, null, null).orElseThrow();
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        OffsetDateTime start = today.minusDays(2).atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime end = today.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        jdbcClient.sql("""
+                INSERT INTO click_events (link_id, clicked_at)
+                VALUES (:id, :before), (:id, :start), (:id, :start), (:id, :today), (:id, :end)
+                """)
+                .param("id", link.id())
+                .param("before", start.minusSeconds(1))
+                .param("start", start)
+                .param("today", today.atStartOfDay().atOffset(ZoneOffset.UTC))
+                .param("end", end)
+                .update();
+
+        HttpResponse<String> response = getAnalytics(owner, link.id(), "?days=3");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+        DocumentContext analytics = JsonPath.parse(response.body());
+        assertThat(analytics.read("$.link_id", Long.class)).isEqualTo(link.id());
+        assertThat(analytics.read("$.total_clicks", Long.class)).isEqualTo(3);
+        assertThat(analytics.read("$.timezone", String.class)).isEqualTo("UTC");
+        assertThat(analytics.<List<String>>read("$.daily_clicks[*].date"))
+                .containsExactly(start.toLocalDate().toString(), today.minusDays(1).toString(), today.toString());
+        assertThat(analytics.<List<Integer>>read("$.daily_clicks[*].clicks")).containsExactly(2, 0, 1);
+
+        LinkRecord emptyLink = linkRepository.insertOnConflictDoNothing(
+                "analytics-empty", "https://example.com/empty", owner.userId, null, null).orElseThrow();
+        HttpResponse<String> empty = getAnalytics(owner, emptyLink.id(), "");
+        assertThat(empty.statusCode()).isEqualTo(200);
+        DocumentContext emptyAnalytics = JsonPath.parse(empty.body());
+        assertThat(emptyAnalytics.read("$.total_clicks", Long.class)).isZero();
+        assertThat(emptyAnalytics.<List<Integer>>read("$.daily_clicks[*].clicks"))
+                .hasSize(30).containsOnly(0);
+    }
+
+    @Test
+    void shouldRestrictClickAnalyticsToTheOwnerOfAnUndeletedLink() throws Exception {
+        UserSession owner = createUserSession("analytics-owner@linkscale.local", "password123");
+        UserSession otherUser = createUserSession("analytics-visitor@linkscale.local", "password123");
+        LinkRecord link = linkRepository.insertOnConflictDoNothing(
+                "analytics-private", "https://example.com", owner.userId, null, null).orElseThrow();
+
+        assertThat(getAnalytics(null, link.id(), "").statusCode()).isEqualTo(401);
+        assertThat(getAnalytics(otherUser, link.id(), "").statusCode()).isEqualTo(404);
+        assertThat(getAnalytics(owner, Long.MAX_VALUE, "").statusCode()).isEqualTo(404);
+        for (String invalidDays : List.of("0", "91", "abc")) {
+            assertThat(getAnalytics(owner, link.id(), "?days=" + invalidDays).statusCode()).isEqualTo(400);
+        }
+        assertThat(linkRepository.softDelete(link.id(), owner.userId)).isTrue();
+        assertThat(getAnalytics(owner, link.id(), "").statusCode()).isEqualTo(404);
+    }
+
+    private HttpResponse<String> getAnalytics(UserSession session, Long id, String query) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(getBaseUrl() + "/api/v1/links/" + id + "/analytics" + query))
+                .GET()
+                .build();
+        HttpClient client = session == null ? anonymousClient : session.client;
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 

@@ -1,12 +1,15 @@
 package com.linkscale.backend.controller;
 
 import com.linkscale.backend.dto.CreateLinkRequest;
+import com.linkscale.backend.dto.LinkAnalyticsResponse;
 import com.linkscale.backend.dto.LinkResponse;
 import com.linkscale.backend.dto.PageResponse;
 import com.linkscale.backend.dto.UpdateLinkRequest;
 import com.linkscale.backend.service.AuthService;
+import com.linkscale.backend.service.LinkAnalyticsService;
 import com.linkscale.backend.service.LinkService;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -19,10 +22,12 @@ public class LinkController {
 
     private final LinkService linkService;
     private final AuthService authService;
+    private final LinkAnalyticsService linkAnalyticsService;
 
-    public LinkController(LinkService linkService, AuthService authService) {
+    public LinkController(LinkService linkService, AuthService authService, LinkAnalyticsService linkAnalyticsService) {
         this.linkService = linkService;
         this.authService = authService;
+        this.linkAnalyticsService = linkAnalyticsService;
     }
 
     @PostMapping
@@ -53,6 +58,17 @@ public class LinkController {
         Long ownerId = authService.getAuthenticatedUser(authentication).id();
         LinkResponse response = linkService.getLink(id, ownerId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/analytics")
+    public ResponseEntity<LinkAnalyticsResponse> getAnalytics(
+            @PathVariable("id") Long id,
+            @RequestParam(value = "days", defaultValue = "30") String days,
+            Authentication authentication) {
+        Long ownerId = authService.getAuthenticatedUser(authentication).id();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(linkAnalyticsService.getAnalytics(id, ownerId, days));
     }
 
     @PatchMapping("/{id}")

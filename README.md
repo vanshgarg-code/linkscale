@@ -42,6 +42,9 @@ including zero-click days. `total_clicks` is the sum for that window.
 Each successful GET redirect can contribute one click, including repeat visits.
 A signed-out request gets 401. A missing, deleted, or another user's link gets 404.
 
+In the signed-in dashboard, choose **Analytics** on a link to see its click
+total, daily chart, and daily counts for the last 7, 30, or 90 days.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning

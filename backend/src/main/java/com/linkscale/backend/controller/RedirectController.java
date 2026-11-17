@@ -1,6 +1,6 @@
 package com.linkscale.backend.controller;
 
-import com.linkscale.backend.domain.LinkRecord;
+import com.linkscale.backend.domain.RedirectTarget;
 import com.linkscale.backend.service.ClickTrackingService;
 import com.linkscale.backend.service.LinkService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,10 +27,10 @@ public class RedirectController {
 
     @GetMapping("/r/{code}")
     public ResponseEntity<Void> redirect(@PathVariable("code") String code, HttpServletRequest request) {
-        LinkRecord link = linkService.resolveRedirect(code);
+        RedirectTarget link = linkService.resolveRedirect(code);
         URI destination = URI.create(link.destinationUrl());
         if (HttpMethod.GET.matches(request.getMethod())) {
-            clickTrackingService.recordClick(link.id());
+            clickTrackingService.recordClick(link.linkId());
         }
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(destination)

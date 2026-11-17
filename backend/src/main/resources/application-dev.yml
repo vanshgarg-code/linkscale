@@ -15,5 +15,7 @@ spring:
         format_sql: true
 
 linkscale:
+  redirect-cache:
+    enabled: ${LINKSCALE_REDIRECT_CACHE_ENABLED:true}
   dev-mode:
     allow-unauthenticated: true

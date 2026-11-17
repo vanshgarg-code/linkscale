@@ -2,6 +2,7 @@ package com.linkscale.backend.service;
 
 import com.linkscale.backend.config.LinkScaleProperties;
 import com.linkscale.backend.domain.LinkRecord;
+import com.linkscale.backend.domain.RedirectTarget;
 import com.linkscale.backend.dto.CreateLinkRequest;
 import com.linkscale.backend.dto.LinkResponse;
 import com.linkscale.backend.dto.PageResponse;
@@ -17,6 +18,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Service
 public class LinkService {
@@ -26,17 +28,23 @@ public class LinkService {
     private final CustomAliasValidator customAliasValidator;
     private final CodeGenerator codeGenerator;
     private final LinkScaleProperties properties;
+    private final RedirectCache redirectCache;
+
+    // Cache population and link mutations must not overlap within this instance.
+    private final ReentrantReadWriteLock redirectLock = new ReentrantReadWriteLock(true);
 
     public LinkService(LinkRepository linkRepository,
                        UrlValidator urlValidator,
                        CustomAliasValidator customAliasValidator,
                        CodeGenerator codeGenerator,
-                       LinkScaleProperties properties) {
+                       LinkScaleProperties properties,
+                       RedirectCache redirectCache) {
         this.linkRepository = linkRepository;
         this.urlValidator = urlValidator;
         this.customAliasValidator = customAliasValidator;
         this.codeGenerator = codeGenerator;
         this.properties = properties;
+        this.redirectCache = redirectCache;
     }
 
     public LinkResponse createLink(CreateLinkRequest request, Long ownerId) {
@@ -90,24 +98,33 @@ public class LinkService {
             throw new IllegalArgumentException("active status must not be null when provided");
         }
 
-        LinkRecord updated = linkRepository.updateLink(
-                id,
-                ownerId,
-                request.isTitleSet(),
-                request.getTitle(),
-                request.isExpiresAtSet(),
-                request.getExpiresAt(),
-                request.isActiveSet(),
-                request.getActive()
-        ).orElseThrow(() -> new LinkNotFoundException("Link not found: " + id));
-
-        return toResponse(updated);
+        redirectLock.writeLock().lock();
+        try {
+            LinkRecord updated = linkRepository.updateLink(
+                    id,
+                    ownerId,
+                    request.isTitleSet(),
+                    request.getTitle(),
+                    request.isExpiresAtSet(),
+                    request.getExpiresAt(),
+                    request.isActiveSet(),
+                    request.getActive()
+            ).orElseThrow(() -> new LinkNotFoundException("Link not found: " + id));
+            redirectCache.evict(updated.code());
+            return toResponse(updated);
+        } finally {
+            redirectLock.writeLock().unlock();
+        }
     }
 
     public void deleteLink(Long id, Long ownerId) {
-        boolean deleted = linkRepository.softDelete(id, ownerId);
-        if (!deleted) {
-            throw new LinkNotFoundException("Link not found: " + id);
+        redirectLock.writeLock().lock();
+        try {
+            String code = linkRepository.softDelete(id, ownerId)
+                    .orElseThrow(() -> new LinkNotFoundException("Link not found: " + id));
+            redirectCache.evict(code);
+        } finally {
+            redirectLock.writeLock().unlock();
         }
     }
 
@@ -152,24 +169,40 @@ public class LinkService {
         );
     }
 
-    public LinkRecord resolveRedirect(String rawCode) {
+    public RedirectTarget resolveRedirect(String rawCode) {
         if (rawCode == null || rawCode.isBlank()) {
             throw new LinkNotFoundException("Link code must not be blank");
         }
 
         String code = rawCode.trim().toLowerCase(Locale.ROOT);
-        LinkRecord link = linkRepository.findByCode(code)
-                .orElseThrow(() -> new LinkNotFoundException("Link not found: " + code));
+        redirectLock.readLock().lock();
+        try {
+            Optional<RedirectTarget> cached = redirectCache.get(code);
+            if (cached.isPresent()) {
+                RedirectTarget target = cached.get();
+                checkExpiry(code, target);
+                return target;
+            }
 
-        if (!link.active() || link.deletedAt() != null) {
-            throw new LinkNotFoundException("Link is inactive or deleted: " + code);
+            LinkRecord link = linkRepository.findByCode(code)
+                    .orElseThrow(() -> new LinkNotFoundException("Link not found: " + code));
+            if (!link.active() || link.deletedAt() != null) {
+                throw new LinkNotFoundException("Link is inactive or deleted: " + code);
+            }
+
+            RedirectTarget target = new RedirectTarget(link.id(), link.destinationUrl(), link.expiresAt());
+            checkExpiry(code, target);
+            redirectCache.put(code, target);
+            return target;
+        } finally {
+            redirectLock.readLock().unlock();
         }
+    }
 
-        if (link.isExpired(OffsetDateTime.now())) {
+    private void checkExpiry(String code, RedirectTarget target) {
+        if (target.expiresAt() != null && !target.expiresAt().isAfter(OffsetDateTime.now())) {
             throw new LinkExpiredException("Link has expired: " + code);
         }
-
-        return link;
     }
 
     private LinkResponse toResponse(LinkRecord link) {

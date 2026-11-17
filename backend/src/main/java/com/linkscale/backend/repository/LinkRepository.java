@@ -147,17 +147,17 @@ public class LinkRepository {
         return spec.query(LINK_ROW_MAPPER).optional();
     }
 
-    public boolean softDelete(Long id, Long ownerId) {
-        int rows = jdbcClient.sql("""
+    public Optional<String> softDelete(Long id, Long ownerId) {
+        return jdbcClient.sql("""
                 UPDATE links
                 SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id AND owner_id = :ownerId AND deleted_at IS NULL
+                RETURNING code
                 """)
                 .param("id", id)
                 .param("ownerId", ownerId)
-                .update();
-
-        return rows > 0;
+                .query(String.class)
+                .optional();
     }
 
     private void appendFilters(StringBuilder sql, Map<String, Object> params, Long ownerId, String search, String status) {

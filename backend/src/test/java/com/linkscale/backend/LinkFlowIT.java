@@ -11,6 +11,7 @@ import com.linkscale.backend.service.CodeGenerator;
 import com.linkscale.backend.service.CustomAliasValidator;
 import com.linkscale.backend.service.DevFixtureService;
 import com.linkscale.backend.service.LinkService;
+import com.linkscale.backend.service.RedirectCache;
 import com.linkscale.backend.service.UrlValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,9 @@ class LinkFlowIT {
 
     @Autowired
     private LinkScaleProperties properties;
+
+    @Autowired
+    private RedirectCache redirectCache;
 
     private HttpClient httpClient;
     private CookieManager cookieManager;
@@ -284,7 +288,7 @@ class LinkFlowIT {
 
         LinkService testLinkService = new LinkService(
                 linkRepository, urlValidator, customAliasValidator,
-                deterministicGenerator, properties);
+                deterministicGenerator, properties, redirectCache);
 
         CreateLinkRequest req = new CreateLinkRequest("https://fresh-target.com", null, "Retry Test", null);
         LinkResponse response = testLinkService.createLink(req, ownerId);
@@ -307,7 +311,7 @@ class LinkFlowIT {
 
         LinkService testLinkService = new LinkService(
                 linkRepository, urlValidator, customAliasValidator,
-                alwaysCollidingGenerator, properties);
+                alwaysCollidingGenerator, properties, redirectCache);
 
         CreateLinkRequest req = new CreateLinkRequest("https://fresh-target.com", null, "Exhaust Test", null);
         assertThatThrownBy(() -> testLinkService.createLink(req, ownerId))

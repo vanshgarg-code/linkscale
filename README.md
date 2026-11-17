@@ -45,6 +45,25 @@ A signed-out request gets 401. A missing, deleted, or another user's link gets 4
 In the signed-in dashboard, choose **Analytics** on a link to see its click
 total, daily chart, and daily counts for the last 7, 30, or 90 days.
 
+## Redis redirect cache
+
+The development profile uses Redis on port 6379. Start PostgreSQL and Redis
+with `docker compose up -d`. A cache miss reads PostgreSQL, and a cache hit
+still records a click for each successful GET. Entries last at most 60 seconds
+and never outlive the link's expiry. Link updates and deletions evict entries.
+
+The cache is designed for a single application instance. On a failed eviction,
+LinkScale uses PostgreSQL until the application restarts so a recovered Redis
+cannot serve the stale entry. Redis is optional for application health. Set
+`LINKSCALE_REDIRECT_CACHE_ENABLED=false` to run the dev app without the cache.
+
+With the app running, visit an active short link twice, then run
+`docker compose exec redis redis-cli --scan --pattern "linkscale:redirect:*"`.
+The link should have a Redis key, and analytics should show both clicks.
+Deactivate it and confirm the URL returns 404. Reactivate it, stop Redis with
+`docker compose stop redis`, and confirm the URL still redirects. Restore the
+service with `docker compose start redis`.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning
@@ -71,7 +90,7 @@ total, daily chart, and daily counts for the last 7, 30, or 90 days.
 ### Project Structure
 ```
 LinkScale/
-├── compose.yaml              # Docker Compose for local PostgreSQL 17.11-alpine
+├── compose.yaml              # Docker Compose for local PostgreSQL and Redis
 ├── .env.example              # Environment variables template
 ├── .gitignore                # Git ignore rules
 ├── README.md                 # Project documentation & runbook

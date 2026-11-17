@@ -222,7 +222,7 @@ class LinkManagementIT {
         for (String invalidDays : List.of("0", "91", "abc")) {
             assertThat(getAnalytics(owner, link.id(), "?days=" + invalidDays).statusCode()).isEqualTo(400);
         }
-        assertThat(linkRepository.softDelete(link.id(), owner.userId)).isTrue();
+        assertThat(linkRepository.softDelete(link.id(), owner.userId)).contains(link.code());
         assertThat(getAnalytics(owner, link.id(), "").statusCode()).isEqualTo(404);
     }
 

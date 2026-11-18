@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\""
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "lucide-react": "^0.378.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.65.1",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.2",
     "@types/react-dom": "^18.3.0",

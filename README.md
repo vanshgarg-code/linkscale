@@ -87,6 +87,36 @@ the proxy IP until trusted forwarding is configured. Start Redis with
 `docker compose up -d redis`. For local work without Redis, set
 `LINKSCALE_RATE_LIMIT_ENABLED=false` before starting Spring Boot.
 
+## Browser smoke test
+
+The Playwright test signs up a fresh account (signup also signs the user in),
+shortens a local URL, follows it as a signed-out visitor, and checks that
+the dashboard shows one recorded click. Use a local development database.
+The test creates one account and one link per run.
+
+Start Docker Desktop, then run from the repository root in PowerShell:
+
+```powershell
+docker compose up -d
+Set-Location backend
+$env:SPRING_PROFILES_ACTIVE = 'dev'
+.\mvnw.cmd spring-boot:run
+```
+
+Once Spring Boot is listening on port 8080, open a second PowerShell
+window in the repository root:
+
+```powershell
+Set-Location frontend
+npm.cmd ci
+npx.cmd playwright install chromium
+npm.cmd run test:e2e
+```
+
+Playwright starts and stops Vite on port 4173. If repeated runs hit the
+registration rate limit, wait 60 seconds before rerunning. On failure,
+the trace is saved under `frontend/test-results/`.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning

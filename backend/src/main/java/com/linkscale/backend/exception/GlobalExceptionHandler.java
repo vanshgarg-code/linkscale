@@ -86,6 +86,14 @@ public class GlobalExceptionHandler {
                 .body(ApiErrorResponse.of(HttpStatus.FORBIDDEN.value(), "Forbidden", ex.getMessage()));
     }
 
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimit(RateLimitException ex) {
+        return ResponseEntity.status(ex.status())
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
+                .cacheControl(CacheControl.noStore())
+                .body(ApiErrorResponse.of(ex.status().value(), ex.status().getReasonPhrase(), ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneral(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

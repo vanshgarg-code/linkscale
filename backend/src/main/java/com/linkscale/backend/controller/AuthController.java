@@ -7,6 +7,7 @@ import com.linkscale.backend.dto.RegisterRequest;
 import com.linkscale.backend.dto.UserResponse;
 import com.linkscale.backend.repository.UserRepository;
 import com.linkscale.backend.service.AuthService;
+import com.linkscale.backend.service.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -30,6 +31,7 @@ import java.util.Locale;
 public class AuthController {
 
     private final AuthService authService;
+    private final RateLimiter rateLimiter;
     private final UserRepository userRepository;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
@@ -37,11 +39,13 @@ public class AuthController {
     private final SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder.getContextHolderStrategy();
 
     public AuthController(AuthService authService,
+                          RateLimiter rateLimiter,
                           UserRepository userRepository,
                           AuthenticationManager authenticationManager,
                           SecurityContextRepository securityContextRepository,
                           CsrfTokenRepository csrfTokenRepository) {
         this.authService = authService;
+        this.rateLimiter = rateLimiter;
         this.userRepository = userRepository;
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
@@ -68,7 +72,9 @@ public class AuthController {
     }
 
     @PostMapping("/api/v1/auth/register")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request,
+                                                  HttpServletRequest httpRequest) {
+        rateLimiter.checkRegistration(httpRequest.getRemoteAddr());
         UserResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -77,6 +83,7 @@ public class AuthController {
     public ResponseEntity<UserResponse> login(@Valid @RequestBody LoginRequest request,
                                              HttpServletRequest httpRequest,
                                              HttpServletResponse httpResponse) {
+        rateLimiter.checkLogin(httpRequest.getRemoteAddr());
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(normalizedEmail, request.password())

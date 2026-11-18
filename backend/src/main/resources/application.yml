@@ -1,3 +1,6 @@
+server:
+  forward-headers-strategy: none
+
 spring:
   application:
     name: linkscale-backend
@@ -33,6 +36,8 @@ management:
         enabled: true
 
 linkscale:
+  rate-limit:
+    enabled: ${LINKSCALE_RATE_LIMIT_ENABLED:true}
   redirect-cache:
     enabled: ${LINKSCALE_REDIRECT_CACHE_ENABLED:false}
   base-url: http://localhost:8080

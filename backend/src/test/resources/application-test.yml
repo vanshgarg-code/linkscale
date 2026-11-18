@@ -3,5 +3,7 @@ spring:
     show-sql: true
 
 linkscale:
+  rate-limit:
+    enabled: false
   dev-mode:
     allow-unauthenticated: true

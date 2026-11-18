@@ -8,6 +8,7 @@ import com.linkscale.backend.dto.UpdateLinkRequest;
 import com.linkscale.backend.service.AuthService;
 import com.linkscale.backend.service.LinkAnalyticsService;
 import com.linkscale.backend.service.LinkService;
+import com.linkscale.backend.service.RateLimiter;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -23,17 +24,21 @@ public class LinkController {
     private final LinkService linkService;
     private final AuthService authService;
     private final LinkAnalyticsService linkAnalyticsService;
+    private final RateLimiter rateLimiter;
 
-    public LinkController(LinkService linkService, AuthService authService, LinkAnalyticsService linkAnalyticsService) {
+    public LinkController(LinkService linkService, AuthService authService, LinkAnalyticsService linkAnalyticsService,
+                          RateLimiter rateLimiter) {
         this.linkService = linkService;
         this.authService = authService;
         this.linkAnalyticsService = linkAnalyticsService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping
     public ResponseEntity<LinkResponse> createLink(@Valid @RequestBody CreateLinkRequest request,
                                                    Authentication authentication) {
         Long ownerId = authService.getAuthenticatedUser(authentication).id();
+        rateLimiter.checkLinkCreation(ownerId);
         LinkResponse response = linkService.createLink(request, ownerId);
         return ResponseEntity.created(URI.create("/r/" + response.code())).body(response);
     }

@@ -64,6 +64,29 @@ Deactivate it and confirm the URL returns 404. Reactivate it, stop Redis with
 `docker compose stop redis`, and confirm the URL still redirects. Restore the
 service with `docker compose start redis`.
 
+## API rate limits
+
+Redis enforces a 60-second window starting with the first request in each
+bucket. Login and registration use the direct client IP as seen by Spring Boot.
+Link creation uses the signed-in account ID.
+
+| Action | Requests per window |
+| --- | ---: |
+| Login | 10 per IP |
+| Registration | 5 per IP |
+| Create a short link | 30 per account |
+
+Requests that reach these controllers count even if credentials or link
+details are rejected later. A full bucket returns HTTP 429 and a
+`Retry-After` header in seconds. If Redis cannot check a limit, these three
+actions return HTTP 503 until Redis is reachable again. Public redirects
+continue to use their PostgreSQL fallback.
+
+Forwarded IP headers are ignored. Behind a proxy, anonymous limits share
+the proxy IP until trusted forwarding is configured. Start Redis with
+`docker compose up -d redis`. For local work without Redis, set
+`LINKSCALE_RATE_LIMIT_ENABLED=false` before starting Spring Boot.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning

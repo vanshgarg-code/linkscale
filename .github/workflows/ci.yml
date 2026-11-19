@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Run unit and Testcontainers integration tests
+        working-directory: backend
+        run: bash mvnw -B clean verify
+
+  browser:
+    name: Frontend and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install, lint, and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Install Playwright Chromium and system dependencies
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Package backend
+        working-directory: backend
+        run: bash mvnw -B -Dmaven.test.skip=true package
+
+      - name: Start PostgreSQL and Redis
+        run: docker compose up --detach --wait --wait-timeout 60
+
+      - name: Run Playwright smoke test
+        working-directory: frontend
+        shell: bash
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+        run: |
+          java -jar ../backend/target/linkscale-backend-*.jar > "$RUNNER_TEMP/linkscale-backend.log" 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+
+          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+            --retry-delay 2 --max-time 2 http://127.0.0.1:8080/actuator/health
+          npm run test:e2e
+
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: browser-test-diagnostics
+          path: |
+            frontend/test-results/
+            ${{ runner.temp }}/linkscale-backend.log
+          if-no-files-found: ignore

@@ -117,6 +117,7 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/index.html", "/login", "/register", "/dashboard", "/assets/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/r/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/csrf").permitAll()

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchCurrentUser, login, register } from '../api';
 
@@ -10,6 +11,7 @@ interface AuthFormProps {
 export default function AuthForm({ mode, setUser }: AuthFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
@@ -71,19 +73,30 @@ export default function AuthForm({ mode, setUser }: AuthFormProps) {
 
             <div>
               <label htmlFor="auth-password" className="block text-sm font-semibold">Password</label>
-              <input
-                id="auth-password"
-                name="password"
-                type="password"
-                autoComplete={isRegister ? 'new-password' : 'current-password'}
-                minLength={isRegister ? 8 : undefined}
-                maxLength={isRegister ? 128 : undefined}
-                aria-describedby={isRegister ? 'auth-password-hint' : undefined}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mt-2 block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 focus:border-darkNavy focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <div className="relative mt-2">
+                <input
+                  id="auth-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  minLength={isRegister ? 8 : undefined}
+                  maxLength={isRegister ? 128 : undefined}
+                  aria-describedby={isRegister ? 'auth-password-hint' : undefined}
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="block w-full rounded-md border border-slate-300 bg-white pl-3 pr-12 py-2.5 focus:border-darkNavy focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-controls="auth-password"
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-slate-600 hover:text-darkNavy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-darkNavy"
+                >
+                  {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+                </button>
+              </div>
               {isRegister && <p id="auth-password-hint" className="mt-2 text-sm text-slate-600">Use at least 8 characters.</p>}
             </div>
 

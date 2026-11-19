@@ -79,7 +79,7 @@ jobs:
           backend_pid=$!
           trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
 
-          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-all-errors \
             --retry-delay 2 --max-time 2 http://127.0.0.1:8080/actuator/health
           npm run test:e2e
 
@@ -129,7 +129,7 @@ jobs:
             --network linkscale-ci_default --publish 127.0.0.1:8080:8080 \
             --env SPRING_PROFILES_ACTIVE=dev --env SERVER_ADDRESS=0.0.0.0 \
             --env POSTGRES_HOST=postgres --env REDIS_HOST=redis linkscale:ci
-          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-all-errors \
             --retry-delay 2 --max-time 2 http://localhost:8080/actuator/health
           npm run test:e2e
 

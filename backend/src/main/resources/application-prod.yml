@@ -1,0 +1,37 @@
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  forward-headers-strategy: native
+  tomcat:
+    redirect-context-root: false
+    remoteip:
+      internal-proxies: '${LINKSCALE_TRUSTED_PROXIES:(?!)}'
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        secure: true
+        http-only: true
+        same-site: lax
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  data:
+    redis:
+      url: ${SPRING_DATA_REDIS_URL}
+  jpa:
+    show-sql: false
+
+linkscale:
+  base-url: ${LINKSCALE_BASE_URL}
+  rate-limit:
+    enabled: true
+  redirect-cache:
+    enabled: true
+  dev-mode:
+    allow-unauthenticated: false

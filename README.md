@@ -154,6 +154,40 @@ Run one backend instance for the initial release. Sessions are currently
 held in that instance's memory, and cache invalidation assumes one
 instance. Backend restarts require users to sign in again.
 
+## Application container
+
+Build the image from the repository root:
+
+```powershell
+docker build -t linkscale:local .
+```
+
+The image builds the React frontend, packages it inside the Spring Boot
+JAR, and runs Java as an unprivileged user. It serves frontend pages,
+API requests, and short-link redirects from one origin. Refreshing a
+frontend route loads React, which checks the current session before
+showing the dashboard.
+
+The image defaults to the `prod` profile. Supply the production environment
+values listed above through the host's secret settings, connect it to
+PostgreSQL and Redis, and expose its `PORT` through an HTTPS reverse proxy.
+The hosting platform supplies the public hostname, TLS termination, and
+trusted proxy source addresses.
+
+To run the browser test against an already-running local packaged app
+on port 8080, open PowerShell in `frontend/`:
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL = 'http://localhost:8080'
+npm.cmd run test:e2e
+Remove-Item Env:PLAYWRIGHT_BASE_URL
+```
+
+The test creates an account and a short link. Use a development database.
+When `PLAYWRIGHT_BASE_URL` is unset, Playwright starts Vite on port 4173
+for the usual development test. CI also builds the Docker image and
+checks the packaged application with a separate browser test job.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning

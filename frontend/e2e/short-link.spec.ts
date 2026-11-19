@@ -28,6 +28,8 @@ test('a new user can shorten a URL and see a public visit in analytics', async (
   }
 
   await page.getByRole('link', { name: 'Dashboard' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.reload();
   await expect(page.getByRole('heading', { name: 'Your links' })).toBeVisible();
   const linkRow = page.getByRole('listitem').filter({
     has: page.getByRole('link', { name: shortUrl, exact: true }),

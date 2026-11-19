@@ -79,7 +79,7 @@ jobs:
           backend_pid=$!
           trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
 
-          curl --fail --silent --show-error --retry 30 --retry-connrefused \
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-all-errors \
             --retry-delay 2 --max-time 2 http://127.0.0.1:8080/actuator/health
           npm run test:e2e
 
@@ -91,4 +91,58 @@ jobs:
           path: |
             frontend/test-results/
             ${{ runner.temp }}/linkscale-backend.log
+          if-no-files-found: ignore
+
+  container:
+    name: Container browser test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build application image
+        run: docker build --tag linkscale:ci .
+
+      - name: Install browser test runner
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start PostgreSQL and Redis
+        run: docker compose --project-name linkscale-ci up --detach --wait --wait-timeout 60
+
+      - name: Test the packaged application
+        working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:8080
+        run: |
+          docker run --detach --name linkscale-container \
+            --network linkscale-ci_default --publish 127.0.0.1:8080:8080 \
+            --env SPRING_PROFILES_ACTIVE=dev --env SERVER_ADDRESS=0.0.0.0 \
+            --env POSTGRES_HOST=postgres --env REDIS_HOST=redis linkscale:ci
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-all-errors \
+            --retry-delay 2 --max-time 2 http://localhost:8080/actuator/health
+          npm run test:e2e
+
+      - name: Collect container logs
+        if: failure()
+        run: docker logs linkscale-container > "$RUNNER_TEMP/linkscale-container.log" 2>&1 || true
+
+      - name: Upload container failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: container-test-diagnostics
+          path: |
+            frontend/test-results/
+            ${{ runner.temp }}/linkscale-container.log
           if-no-files-found: ignore

@@ -1,0 +1,10 @@
+.git
+.github
+**/node_modules
+**/dist
+**/target
+**/test-results
+**/playwright-report
+**/.env*
+**/.npmrc
+**/*.log

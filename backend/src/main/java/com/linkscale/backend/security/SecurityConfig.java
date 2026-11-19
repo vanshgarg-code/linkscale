@@ -1,6 +1,7 @@
 package com.linkscale.backend.security;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -46,9 +47,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CsrfTokenRepository csrfTokenRepository() {
+    public CsrfTokenRepository csrfTokenRepository(
+            @Value("${server.servlet.session.cookie.secure:false}") boolean secureCookies) {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookiePath("/");
+        repository.setCookieCustomizer(cookie -> cookie.secure(secureCookies).sameSite("Lax"));
         return repository;
     }
 

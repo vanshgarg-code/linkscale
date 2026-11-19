@@ -117,6 +117,43 @@ Playwright starts and stops Vite on port 4173. If repeated runs hit the
 registration rate limit, wait 60 seconds before rerunning. On failure,
 the trace is saved under `frontend/test-results/`.
 
+## Production configuration
+
+Activate the `prod` Spring profile on the host. Serve the frontend and
+backend through the same HTTPS origin. Route `/api/**`, `/r/**`, and
+`/actuator/health` to Spring Boot and serve the built frontend for page
+routes, including direct visits to `/login`, `/register`, and `/dashboard`.
+
+Set these values in the host's environment or secret settings:
+
+| Variable | Value |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `LINKSCALE_BASE_URL` | Public HTTPS origin, such as `https://links.example.com`, without a trailing slash |
+| `SPRING_DATASOURCE_URL` | PostgreSQL JDBC URL with the database provider's TLS settings |
+| `SPRING_DATASOURCE_USERNAME` | Database username |
+| `SPRING_DATASOURCE_PASSWORD` | Database password |
+| `SPRING_DATA_REDIS_URL` | Provider connection URL, including credentials if required. Use `rediss://` for TLS |
+| `LINKSCALE_TRUSTED_PROXIES` | Regex or CIDR list for the actual reverse proxy's source addresses |
+| `PORT` | Host-assigned backend port. Defaults to `8080` |
+
+The trusted proxy setting defaults to a regex that matches no addresses.
+Set it after selecting the hosting topology. For a proxy running on the
+same machine and connecting over IPv4 loopback, use `127\\.0\\.0\\.1`.
+The proxy must overwrite client-supplied forwarding headers, and the
+backend port must be reachable only from the trusted proxy. Forwarded
+client addresses determine the anonymous login and registration budgets.
+
+Production session and CSRF cookies use `Secure` and `SameSite=Lax`.
+The session cookie also uses `HttpOnly`. Sessions expire after 30 minutes
+of inactivity. Redis caching and rate limiting are enabled, and Flyway
+applies migrations on startup. Environment values must be supplied by
+the host. Spring Boot does not automatically load the Compose `.env` file.
+
+Run one backend instance for the initial release. Sessions are currently
+held in that instance's memory, and cache invalidation assumes one
+instance. Backend restarts require users to sign in again.
+
 ## Roadmap
 
 - [x] Phase 0 — Architecture and planning

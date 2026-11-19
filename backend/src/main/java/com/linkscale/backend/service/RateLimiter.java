@@ -1,6 +1,8 @@
 package com.linkscale.backend.service;
 
 import com.linkscale.backend.exception.RateLimitException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -12,6 +14,8 @@ import java.util.List;
 
 @Service
 public class RateLimiter {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RateLimiter.class);
 
     // Run the counter check and expiry together so parallel requests share one budget.
     private static final RedisScript<Long> ACQUIRE = RedisScript.of("""
@@ -61,10 +65,28 @@ public class RateLimiter {
             retryAfter = redis.execute(ACQUIRE, List.of("linkscale:rate-limit:" + bucket),
                     Integer.toString(limit), Integer.toString(windowMillis));
         } catch (DataAccessException exception) {
+            Throwable root = exception.getMostSpecificCause();
+            // Log types and an allowlisted error code, never URLs, credentials, or raw messages.
+            String message = root.getMessage();
+            String code = "UNKNOWN";
+            if (message != null) {
+                for (String candidate : List.of("WRONGPASS", "NOAUTH", "NOPERM", "NOSCRIPT",
+                        "OOM", "BUSY", "READONLY", "LOADING", "CLUSTERDOWN")) {
+                    if (message.matches("(?s).*\\b" + candidate + "\\b.*")) {
+                        code = candidate;
+                        break;
+                    }
+                }
+            }
+            LOGGER.warn("Redis rate-limit check failed: type={}, rootType={}, code={}",
+                    exception.getClass().getSimpleName(), root.getClass().getSimpleName(), code);
             throw unavailable();
         }
 
-        if (retryAfter == null) throw unavailable();
+        if (retryAfter == null) {
+            LOGGER.warn("Redis rate-limit check failed: script returned no result");
+            throw unavailable();
+        }
         if (retryAfter > 0) {
             throw new RateLimitException(HttpStatus.TOO_MANY_REQUESTS, retryAfter,
                     "Too many requests. Try again in " + retryAfter + " seconds.");
